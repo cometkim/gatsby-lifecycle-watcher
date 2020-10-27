@@ -1,3 +1,4 @@
+const path = require('path');
 const fs = require('fs');
 
 const packageManifest = require('./package.json');
@@ -12,7 +13,7 @@ const check = (key, cb) => {
 };
 
 const appendLog = value => {
-  fs.appendFileSync(`gatsby-${version}-lifecycle-${process.env.NODE_ENV}.log`, value + '\n', 'utf8');
+  fs.appendFileSync(path.resolve('archives', `gatsby-${version}-lifecycle-${process.env.NODE_ENV}.log`), value + '\n', 'utf8');
 };
 
 // All hooks documented at https://www.gatsbyjs.com/docs/node-apis/
