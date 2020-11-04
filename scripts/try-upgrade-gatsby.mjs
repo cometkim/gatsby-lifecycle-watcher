@@ -1,6 +1,6 @@
 import { task, exec } from './utils.mjs';
 
-await task('Bumping gatsby version...', () => exec('yarn up gatsby -E'));
+await task('Bumping gatsby version...', () => exec('yarn add gatsby -E'));
 
 try {
   const { stdout } = await exec('git diff HEAD package.json | grep "gatsby"');
