@@ -9,7 +9,7 @@ const calls = {};
 const check = (key, next) => {
   if (calls[key]) return;
   calls[key] = true;
-  next(key);
+  next?.(key);
 };
 
 const logFilename = `gatsby-${version}-lifecycle-${process.env.NODE_ENV}.log`;

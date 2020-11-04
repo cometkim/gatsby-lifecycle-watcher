@@ -1,22 +1,33 @@
 import path from 'path';
-import fs from 'fs/promises';
 import timer from 'timers/promises';
 import { spawn } from 'child_process';
-import { task, exec } from './utils.mjs';
 
-async function retrieveLatestLogVersion() {
-  const logs = fs.readdir(path.resolve('archives'));
-  return logs
-}
+import killAll from 'tree-kill';
+import _dedent from '@cometlib/dedent';
+
+import {
+  task,
+  exec,
+  getLogPath,
+  loadLogContent,
+  retrieveLatestLogVersion,
+} from './utils.mjs';
+
+const dedent = _dedent.default;
 
 const prevVersion = await retrieveLatestLogVersion();
-console.log(prevVersion)
+console.log(`The latest recorded version is ${prevVersion}`);
+
+const [prevDevelopLog, prevBuildLog] = await Promise.all([
+  loadLogContent({ version: prevVersion, stage: 'development' }),
+  loadLogContent({ version: prevVersion, stage: 'production' }),
+]);
 
 await task('record gatsby develop...', async () => {
   let done = false;
   let buffer = '';
 
-  const devProcess = spawn('yarn', ['develop'], { encoding: 'utf8' });
+  const devProcess = spawn('yarn', ['develop'], { encoding: 'utf8', shell: true });
   devProcess.stdout.on('data', data => {
     const line = data.toString();
     buffer += line;
@@ -36,97 +47,129 @@ await task('record gatsby develop...', async () => {
     await timer.setTimeout(1000);
   }
 
-  devProcess.kill();
+  killAll(devProcess.pid, 'SIGTERM');
   return buffer;
 });
 
 await task('record gatsby build...', () => exec('yarn build'));
 
-await task('generate report...', () => {
+const currentVersion = await retrieveLatestLogVersion();
+if (currentVersion === prevVersion) {
+  console.log('The version is not changed. skipping');
+  process.exit(0);
+}
+
+const [currentDevelopLog, currentBuildLog] = await Promise.all([
+  loadLogContent({ version: currentVersion, stage: 'development' }),
+  loadLogContent({ version: currentVersion, stage: 'production' }),
+]);
+const hasDevelopChanged = currentDevelopLog !== prevDevelopLog;
+const hasBuildChanged = currentBuildLog !== prevBuildLog;
+const hasChanged = hasDevelopChanged || hasBuildChanged;
+if (!hasChanged) {
+  console.log('No diffs found. skipping');
+  process.exit(0);
+}
+
+await task('generate report...', async () => {
   const render = ({
     diff,
     current,
     prev,
-  }) => `
-# Gatsby Node API breaking changes report
+  }) => dedent`
+    # Gatsby Node API breaking changes report
 
-Seems like the Gatsby Node Lifecycle API is changed since version v${current.version}
+    Seems like the Gatsby Node Lifecycle API is changed since version v${current.version}
 
-See the [changes](https://github.com/gatsbyjs/gatsby/compare/gatsby@${prev.version}...gatsby@${current.version}) and [report an issue](https://github.com/gatsbyjs/gatsby/issues/new?labels=type%3A+bug&template=bug_report.md) if you think this is not intended.
+    See the [changes](https://github.com/gatsbyjs/gatsby/compare/gatsby@${prev.version}...gatsby@${current.version}) and [report an issue](https://github.com/gatsbyjs/gatsby/issues/new?labels=type%3A+bug&template=bug_report.md) if you think this is not intended.
 
-${diff.hasDevelopChanged && `
-## Breaking changes on \`gatsby develop\`
+    ${diff.develop && dedent`
+    ## Breaking changes on \`gatsby develop\`
 
-### Diff
+    ### Diff
 
-\`\`\`diff
-${diff.unified}
-\`\`\`
+    \`\`\`diff
+    ${diff.develop}
+    \`\`\`
 
-### Side-by-Side
+    ### Side-by-Side
 
-<table>
-  <thead>
-    <tr>
-      <th>v${prev.version}</th>
-      <th>v${current.version}</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td><pre>${prev.buildLog}</pre></td>
-      <td><pre>${current.buildLog}</pre></td>
-    </tr>
-  </tbody>
-</table>
-`}
+    <table>
+      <thead>
+        <tr>
+          <th>v${prev.version}</th>
+          <th>v${current.version}</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><pre>${prev.develop}</pre></td>
+          <td><pre>${current.develop}</pre></td>
+        </tr>
+      </tbody>
+    </table>
+    `}
 
-${diff.hasBuildChanged && `
-## Breaking changes on \`gatsby build\`
+    ${diff.build && dedent`
+    ## Breaking changes on \`gatsby build\`
 
-### Diff
+    ### Diff
 
-\`\`\`diff
-${diff.unified}
-\`\`\`
+    \`\`\`diff
+    ${diff.build}
+    \`\`\`
 
-### Side-by-Side
+    ### Side-by-Side
 
-<table>
-  <thead>
-    <tr>
-      <th>v${prev.version}</th>
-      <th>v${current.version}</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td><pre>${prev.buildLog}</pre></td>
-      <td><pre>${current.buildLog}</pre></td>
-    </tr>
-  </tbody>
-</table>
-`}
+    <table>
+      <thead>
+        <tr>
+          <th>v${prev.version}</th>
+          <th>v${current.version}</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><pre>${prev.build}</pre></td>
+          <td><pre>${current.build}</pre></td>
+        </tr>
+      </tbody>
+    </table>
+    `}
 
-${(diff.hasDevelopChanged || diff.hasBuildChanged) && `
-## \`gatsby develop\` vs \`gatsby build\` differences
+    ${diff.developVsBuild && dedent`
+    ## \`gatsby develop\` vs \`gatsby build\` differences
 
-\`\`\`diff
-${current.developVsBuildDiff}
-\`\`\`
-`}
-`;
+    \`\`\`diff
+    ${diff.developVsBuild}
+    \`\`\`
+    `}
+  `;
+
+  const { stdout: developDiff } = await exec(`diff -u ${getLogPath({ version: prevVersion, stage: 'development' })} ${getLogPath({ version: currentVersion, stage: 'development' })} || true`);
+  const { stdout: buildDiff } = await exec(`diff -u ${getLogPath({ version: prevVersion, stage: 'production' })} ${getLogPath({ version: currentVersion, stage: 'production' })} || true`);
+  const { stdout: developVsBuildDiff } = await exec(`diff -u ${getLogPath({ version: currentVersion, stage: 'develop' })} ${getLogPath({ version: currentVersion, stage: 'production' })} || true`);
 
   const context = {
     diff: {
+      develop: developDiff,
+      build: buildDiff,
+      developVsBuild: developVsBuildDiff,
     },
     prev: {
-      version: '',
+      version: prevVersion,
+      develop: prevDevelopLog,
+      build: prevBuildLog,
     },
     current: {
-      version: '',
+      version: currentVersion,
+      develop: currentDevelopLog,
+      build: currentBuildLog,
     },
-  }
+  };
+
+  const report = render(context);
+  await fs.writeFile('report.md', report, { encoding: 'utf8' });
 });
 
 process.exit(0);

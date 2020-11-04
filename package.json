@@ -12,8 +12,10 @@
   },
   "dependencies": {
     "@cometlib/dedent": "^0.8.0-es.10",
-    "gatsby": "2.24.89",
+    "es-semver": "^1.0.1",
+    "gatsby": "2.25.2",
     "react": "^17.0.1",
-    "react-dom": "^17.0.1"
+    "react-dom": "^17.0.1",
+    "tree-kill": "^1.2.2"
   }
 }

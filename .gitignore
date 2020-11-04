@@ -22,3 +22,6 @@ public
 
 # Yarn Integrity file
 .yarn-integrity
+
+# Generated
+/report.md
