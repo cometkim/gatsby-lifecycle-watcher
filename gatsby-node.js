@@ -1,3 +1,4 @@
+const path = require('path');
 const fs = require('fs');
 
 const packageManifest = require('./package.json');
@@ -5,14 +6,19 @@ const { gatsby: version } = packageManifest.dependencies
 
 const calls = {};
 
-const check = (key, cb) => {
+const check = (key, next) => {
   if (calls[key]) return;
-  cb(key);
   calls[key] = true;
+  next?.(key);
 };
 
+const logFilename = `gatsby-${version}-lifecycle-${process.env.NODE_ENV}.log`;
+const logPath = path.resolve('archives', logFilename);
+fs.mkdirSync(path.dirname(logPath), { recursive: true });
+fs.writeFileSync(logPath, '');
+
 const appendLog = value => {
-  fs.appendFileSync(`gatsby-${version}-lifecycle-${process.env.NODE_ENV}.log`, value + '\n', 'utf8');
+  fs.appendFileSync(logPath, value + '\n', 'utf8');
 };
 
 // All hooks documented at https://www.gatsbyjs.com/docs/node-apis/
