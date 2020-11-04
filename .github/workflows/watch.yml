@@ -1,7 +1,7 @@
 # This workflow will do a clean install of node dependencies, build the source code and run tests across different versions of node
 # For more information see: https://help.github.com/actions/language-and-framework-guides/using-nodejs-with-github-actions
 
-name: Watch and Report
+name: Generate report
 
 on:
   schedule:
@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  report:
     runs-on: ubuntu-latest
 
     steps:
@@ -38,12 +38,12 @@ jobs:
 
     - name: Generate report
       run: |
-        node scripts/try-upgrade-gatsby.mjs && node scripts/generate-report.mjs || echo "No new versions found"
-        
+        node scripts/try-upgrade-gatsby.mjs && node scripts/generate-report.mjs || true
+
     - name: Check if the report file generated
       id: generated-report
       run: echo "::set-output name=content::$(cat report.md 2>/dev/null || true)"
-    
+
     - name: Submit report
       if: steps.generated-report.outputs.content != 0
       run: cat report.md
