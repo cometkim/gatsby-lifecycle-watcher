@@ -1,0 +1,48 @@
+# This workflow will do a clean install of node dependencies, build the source code and run tests across different versions of node
+# For more information see: https://help.github.com/actions/language-and-framework-guides/using-nodejs-with-github-actions
+
+name: Watch and Report
+
+on:
+  schedule:
+    - cron: "0 15 * * *"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Use Node.js v15
+      uses: actions/setup-node@v2-beta
+      with:
+        node-version: '15.x'
+
+    - name: Get yarn cache directory path
+      id: yarn-cache-dir-path
+      run: echo "::set-output name=dir::$(yarn cache dir)"
+
+    - uses: actions/cache@v2
+      id: yarn-cache
+      with:
+        path: ${{ steps.yarn-cache-dir-path.outputs.dir }}
+        key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-yarn-
+
+    - name: Install dependencies
+      run: yarn install
+      if: steps.yarn-cache.outputs.cache-hit != 'true'
+
+    - name: Generate report
+      run: |
+        node scripts/try-upgrade-gatsby.mjs && node scripts/generate-report.mjs || echo "No new versions found"
+        
+    - name: Check if the report file generated
+      id: generated-report
+      run: echo "::set-output name=content::$(cat report.md 2>/dev/null || true)"
+    
+    - name: Submit report
+      if: steps.generated-report.outputs.content != 0
+      run: cat report.md
