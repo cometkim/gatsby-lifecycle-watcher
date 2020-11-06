@@ -34,11 +34,11 @@ jobs:
 
     - name: Install dependencies
       run: yarn install
-      if: steps.yarn-cache.outputs.cache-hit != 'true'
 
     - name: Generate report
+      continue-on-error: true
       run: |
-        node scripts/try-upgrade-gatsby.mjs && node scripts/generate-report.mjs || true
+        node scripts/try-upgrade-gatsby.mjs && node scripts/generate-report.mjs
 
     - name: Check if the report file generated
       id: generated-report
