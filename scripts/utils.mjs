@@ -8,10 +8,11 @@ import { rsort as sortVersions } from 'es-semver';
 export const exec = promisify(childProcess.exec);
 
 export async function task(name, func) {
-  console.log(name);
   const scope = `${name} done`;
   console.time(scope);
+  console.group(name);
   const result = await func();
+  console.groupEnd(name);
   console.timeEnd(scope);
   return result;
 }

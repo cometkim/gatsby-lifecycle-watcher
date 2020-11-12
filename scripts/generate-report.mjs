@@ -24,34 +24,41 @@ const [prevDevelopLog, prevBuildLog] = await Promise.all([
 ]);
 
 await task('record gatsby develop...', async () => {
-  let done = false;
-  let buffer = '';
-
+  let devState = { type: 'in_progress', buffer: '' };
   const devProcess = spawn('yarn', ['develop'], { encoding: 'utf8', shell: true });
   devProcess.stdout.on('data', data => {
     const line = data.toString();
-    buffer += line;
+    devState.buffer += line;
+    console.log(line.trimEnd());
     if (line.search('success Building development bundle') !== -1) {
-      done = true;
+      devState = { ...devState, type: 'done' };
     }
   });
   devProcess.stderr.on('data', data => {
     const line = data.toString();
-    throw new Error(line);
-    done = true;
+    devState = { ...devState, type: 'failed', error: line };
   });
 
   const MAX_ITERATION_COUNT = 120;
   for (let i = 0; i < MAX_ITERATION_COUNT; i++) {
-    if (done) break;
-    await timer.setTimeout(1000);
+    if (devState.type === 'in_progress') {
+      await timer.setTimeout(1000);
+    } else {
+      break;
+    }
   }
 
+  // finalize
   killAll(devProcess.pid, 'SIGTERM');
-  return buffer;
+  if (devState.type === 'failed') {
+    throw new Error(devState.error);
+  }
 });
 
-await task('record gatsby build...', () => exec('yarn build'));
+await task('record gatsby build...', async () => {
+  const { stdout } = await exec('yarn build');
+  console.log(stdout.toString());
+});
 
 const currentVersion = await retrieveLatestLogVersion();
 if (currentVersion === prevVersion) {
